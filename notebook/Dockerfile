@@ -1,13 +1,15 @@
 FROM jupyter/base-notebook
+ENV NB_USER="root"
+ENV NB_UID="0"
+ENV NB_GID="0"
 
 USER root
-RUN apt-get update \
+RUN apt-get update && userdel -r jovyan && mkdir -p /home/root \
   && apt-get install -yq --no-install-recommends graphviz git vim \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
-USER $NB_USER
 
-RUN conda update conda 
+RUN conda update conda
 RUN conda install --yes \
     python-blosc \
     cytoolz \
@@ -17,20 +19,23 @@ RUN conda install --yes \
     pandas==0.23.4 \
     ipywidgets \
     jupyterlab==0.35 \
-    && conda clean -tipsy
-RUN jupyter labextension install @jupyter-widgets/jupyterlab-manager dask-labextension@0.2
+    && jupyter labextension install @jupyter-widgets/jupyterlab-manager dask-labextension@0.2 \
+    && pip install graphviz --no-cache-dir  --no-dependencies \
+    && conda clean -tipsy \
+    && jupyter lab clean \
+    && jlpm cache clean \
+    && npm cache clean --force \
+    && find /opt/conda/ -type f,l -name '*.a' -delete \
+    && find /opt/conda/ -type f,l -name '*.pyc' -delete \
+    && find /opt/conda/ -type f,l -name '*.js.map' -delete \
+    && find /opt/conda/lib/python*/site-packages/bokeh/server/static -type f,l -name '*.js' -not -name '*.min.js' -delete \
+    && rm -rf /opt/conda/pkgs
 
-RUN pip install graphviz \
-                --no-cache-dir \
-                --no-dependencies
-
-USER root
 COPY prepare.sh /usr/bin/prepare.sh
 RUN chmod +x /usr/bin/prepare.sh
 RUN mkdir /opt/app
 COPY examples/ /home/$NB_USER/examples
 RUN chown -R $NB_USER /home/$NB_USER/examples
-USER $NB_USER
 
 ENTRYPOINT ["tini", "--", "/usr/bin/prepare.sh"]
-CMD ["start.sh", "jupyter", "lab"]
+CMD ["start.sh", "jupyter", "lab", "--allow-root"]
